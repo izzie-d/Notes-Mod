@@ -52,13 +52,22 @@ public class NotesScreen extends Screen {
 	private Button reminderFilterButton;
 	private Button priorityFilterButton;
 	private Button recentFilterButton;
+	private Button editHudButton;
+	private Button applyHudPositionButton;
+	private Button resetHudPositionButton;
 	private EditBox reminderHoursBox;
 	private EditBox reminderMinutesBox;
 	private EditBox reminderSecondsBox;
+	private EditBox hudXBox;
+	private EditBox hudYBox;
 	private boolean contentFocused;
 	private int contentCursor;
 	private int selectionAnchor = -1;
 	private boolean draggingContentSelection;
+	private boolean editingHudPosition;
+	private boolean draggingHudPosition;
+	private int hudDragOffsetX;
+	private int hudDragOffsetY;
 	private int categoryScroll;
 	private int noteScroll;
 	private int contentScroll;
@@ -138,6 +147,7 @@ public class NotesScreen extends Screen {
 			refreshSelection();
 		})));
 		addRenderableWidget(button(actionX + 130, actionY, 52, 20, "Move", "Move note to next category", button -> moveSelectedToNextCategory()));
+		editHudButton = addRenderableWidget(button(actionX + 188, actionY, 112, 20, "Edit UI Position", "Edit pinned HUD position", button -> toggleHudPositionEditor()));
 		deleteNoteButton = addRenderableWidget(button(panelRight() - PANEL_PAD - 48, actionY, 48, 20, "Del", "Delete selected note", button -> confirmDeleteNote()));
 
 		int reminderY = panelY() + 66;
@@ -152,6 +162,14 @@ public class NotesScreen extends Screen {
 		addRenderableWidget(button(actionX + 214, reminderY, 58, 18, "Snooze", "Snooze reminder using H/M/S fields", button -> snoozeCustomReminder()));
 		addRenderableWidget(button(actionX + 278, reminderY, 48, 18, "Clear", "Disable reminder", button -> getSelectedNote().ifPresent(note -> manager.disableReminder(note.getId()))));
 
+		int hudControlY = panelY() + 88;
+		hudXBox = coordinateBox(actionX, hudControlY, "X", manager.getHudSettings().getX());
+		hudYBox = coordinateBox(actionX + 42, hudControlY, "Y", manager.getHudSettings().getY());
+		addRenderableWidget(hudXBox);
+		addRenderableWidget(hudYBox);
+		applyHudPositionButton = addRenderableWidget(button(actionX + 86, hudControlY, 48, 18, "Apply", "Apply HUD X/Y coordinates", button -> applyHudPositionFields()));
+		resetHudPositionButton = addRenderableWidget(button(actionX + 140, hudControlY, 48, 18, "Reset", "Reset HUD position", button -> resetHudPosition()));
+		syncHudPositionControls();
 		refreshSelection();
 	}
 
@@ -170,6 +188,14 @@ public class NotesScreen extends Screen {
 		return box;
 	}
 
+	private EditBox coordinateBox(int x, int y, String hint, int value) {
+		EditBox box = new EditBox(font, x, y, 36, 18, Component.literal(hint));
+		box.setHint(Component.literal(hint));
+		box.setMaxLength(5);
+		box.setValue(String.valueOf(value));
+		return box;
+	}
+
 	@Override
 	public void extractRenderState(GuiGraphicsExtractor extractor, int mouseX, int mouseY, float tickDelta) {
 		extractor.fill(0, 0, width, height, 0x99000000);
@@ -185,6 +211,7 @@ public class NotesScreen extends Screen {
 		drawCategories(extractor, mouseX, mouseY);
 		drawNoteList(extractor, mouseX, mouseY);
 		drawEditor(extractor);
+		drawHudPositionEditor(extractor, mouseX, mouseY);
 		super.extractRenderState(extractor, mouseX, mouseY, tickDelta);
 		drawContentCaret(extractor);
 	}
@@ -244,7 +271,7 @@ public class NotesScreen extends Screen {
 
 	private void drawEditor(GuiGraphicsExtractor extractor) {
 		int x = editorX() + PANEL_PAD;
-		int y = panelY() + 90;
+		int y = panelY() + 110;
 		int right = panelRight() - PANEL_PAD;
 		getSelectedNote().ifPresentOrElse(note -> {
 			extractor.text(font, Component.literal("Created " + DATE_FORMAT.format(note.getCreatedAt())), x, y, 0xFF64748B, false);
@@ -275,6 +302,22 @@ public class NotesScreen extends Screen {
 			offset += line.length() + 1;
 			lineY += LINE_HEIGHT;
 		}
+	}
+
+	private void drawHudPositionEditor(GuiGraphicsExtractor extractor, int mouseX, int mouseY) {
+		if (!editingHudPosition) {
+			return;
+		}
+		int previewX = manager.getHudSettings().getX();
+		int previewY = manager.getHudSettings().getY();
+		int previewWidth = hudPreviewWidth();
+		int previewHeight = hudPreviewHeight();
+		int color = isHover(mouseX, mouseY, previewX, previewY, previewWidth, previewHeight) ? 0xAA2F7DD1 : 0x88475569;
+		extractor.fill(previewX, previewY, previewX + previewWidth, previewY + previewHeight, 0xAA111827);
+		extractor.outline(previewX, previewY, previewWidth, previewHeight, color);
+		extractor.text(font, Component.literal("Pinned HUD"), previewX + 8, previewY + 8, 0xFFF8FAFC, false);
+		extractor.text(font, Component.literal("drag me"), previewX + 8, previewY + 22, 0xFF94A3B8, false);
+		extractor.text(font, Component.literal("x " + previewX + "  y " + previewY), previewX + 8, previewY + 36, 0xFFCBD5E1, false);
 	}
 
 	private void drawSelectionForLine(GuiGraphicsExtractor extractor, String line, int lineStart, int x, int y) {
@@ -321,6 +364,12 @@ public class NotesScreen extends Screen {
 	public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
 		contentFocused = false;
 		clearSelection();
+		if (editingHudPosition && isInsideHudPreview(event.x(), event.y())) {
+			draggingHudPosition = true;
+			hudDragOffsetX = (int) event.x() - manager.getHudSettings().getX();
+			hudDragOffsetY = (int) event.y() - manager.getHudSettings().getY();
+			return true;
+		}
 		if (handleCategoryClick(event.x(), event.y()) || handleNoteClick(event.x(), event.y()) || handleContentClick(event.x(), event.y())) {
 			return true;
 		}
@@ -329,6 +378,13 @@ public class NotesScreen extends Screen {
 
 	@Override
 	public boolean mouseDragged(MouseButtonEvent event, double dragX, double dragY) {
+		if (draggingHudPosition) {
+			manager.getHudSettings().setX(Math.max(0, (int) event.x() - hudDragOffsetX));
+			manager.getHudSettings().setY(Math.max(0, (int) event.y() - hudDragOffsetY));
+			manager.save();
+			syncHudPositionBoxes();
+			return true;
+		}
 		if (draggingContentSelection && contentFocused) {
 			getSelectedNote().ifPresent(note -> contentCursor = cursorFromMouse(note.getContent(), event.x(), event.y()));
 			return true;
@@ -339,6 +395,7 @@ public class NotesScreen extends Screen {
 	@Override
 	public boolean mouseReleased(MouseButtonEvent event) {
 		draggingContentSelection = false;
+		draggingHudPosition = false;
 		return super.mouseReleased(event);
 	}
 
@@ -539,6 +596,50 @@ public class NotesScreen extends Screen {
 	private void snoozeCustomReminder() {
 		Duration delay = customReminderDuration();
 		getSelectedNote().ifPresent(note -> manager.snoozeReminder(note.getId(), delay));
+	}
+
+	private void toggleHudPositionEditor() {
+		editingHudPosition = !editingHudPosition;
+		editHudButton.setMessage(Component.literal(editingHudPosition ? "Done UI Position" : "Edit UI Position"));
+		syncHudPositionControls();
+	}
+
+	private void applyHudPositionFields() {
+		manager.getHudSettings().setX((int) parseNonNegative(hudXBox == null ? "" : hudXBox.getValue()));
+		manager.getHudSettings().setY((int) parseNonNegative(hudYBox == null ? "" : hudYBox.getValue()));
+		manager.save();
+		syncHudPositionBoxes();
+	}
+
+	private void resetHudPosition() {
+		manager.getHudSettings().setX(12);
+		manager.getHudSettings().setY(12);
+		manager.save();
+		syncHudPositionBoxes();
+	}
+
+	private void syncHudPositionControls() {
+		if (hudXBox == null || hudYBox == null || applyHudPositionButton == null || resetHudPositionButton == null) {
+			return;
+		}
+		hudXBox.setVisible(editingHudPosition);
+		hudYBox.setVisible(editingHudPosition);
+		hudXBox.active = editingHudPosition;
+		hudYBox.active = editingHudPosition;
+		applyHudPositionButton.visible = editingHudPosition;
+		applyHudPositionButton.active = editingHudPosition;
+		resetHudPositionButton.visible = editingHudPosition;
+		resetHudPositionButton.active = editingHudPosition;
+		syncHudPositionBoxes();
+	}
+
+	private void syncHudPositionBoxes() {
+		if (hudXBox != null) {
+			hudXBox.setValue(String.valueOf(manager.getHudSettings().getX()));
+		}
+		if (hudYBox != null) {
+			hudYBox.setValue(String.valueOf(manager.getHudSettings().getY()));
+		}
 	}
 
 	private Duration customReminderDuration() {
@@ -873,7 +974,7 @@ public class NotesScreen extends Screen {
 	}
 
 	private int contentTop() {
-		return panelY() + 124;
+		return panelY() + 144;
 	}
 
 	private int contentBottom() {
@@ -900,6 +1001,20 @@ public class NotesScreen extends Screen {
 	}
 
 	private record LineToken(int start, int end, String value) {
+	}
+
+	private boolean isInsideHudPreview(double mouseX, double mouseY) {
+		int x = manager.getHudSettings().getX();
+		int y = manager.getHudSettings().getY();
+		return mouseX >= x && mouseX <= x + hudPreviewWidth() && mouseY >= y && mouseY <= y + hudPreviewHeight();
+	}
+
+	private int hudPreviewWidth() {
+		return 210;
+	}
+
+	private int hudPreviewHeight() {
+		return 58;
 	}
 
 }

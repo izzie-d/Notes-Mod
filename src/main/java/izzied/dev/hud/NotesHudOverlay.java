@@ -37,7 +37,7 @@ public final class NotesHudOverlay {
 		for (int i = 0; i < Math.min(4, pinnedNotes.size()); i++) {
 			Note note = pinnedNotes.get(i);
 			height += 14;
-			height += Math.max(1, Math.min(3, contentLineCount(note.getContent()))) * 12;
+			height += Math.max(1, contentLineCount(note.getContent())) * 12;
 			height += 4;
 		}
 
@@ -53,9 +53,6 @@ public final class NotesHudOverlay {
 			lineY += 12;
 			int rendered = 0;
 			for (String line : note.getContent().split("\\R")) {
-				if (rendered >= 3) {
-					break;
-				}
 				HudLine hudLine = hudLine(line);
 				if (hudLine.text().isBlank()) {
 					continue;

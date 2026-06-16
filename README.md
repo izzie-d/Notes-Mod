@@ -21,7 +21,8 @@ that file is plain JSON, so you can save it, back it up move it to another direc
 - task notes for checklists, priorities, reminders, and material tracking
 - search across titles, note text, categories, priorities, and task text
 - A pinned HUD view for notes you want visible while playing
-- local reminders with in game messages and optional sound
+- an edit ui Position button for moving the pinned HUD by dragging it or typing exact X/Y coords
+- local reminders with in game messages, optional sound, and custom hour/minute/second timing
 - no server, account, cloud sync, or internet connection required 
 
 
@@ -41,6 +42,10 @@ Ctrl+N - New note
 Ctrl+D - Duplicate note
 Delete - Delete selected note
 ```
+
+reminders use the little H / M / S boxes in the editor. type the delay you want, then press "set" for a one time reminder, repeat for a repeating reminder, or snooze to push the current reminder back by that amount
+
+the edit UI position button lets you move the pinned HUD. you can drag the preview around or type exact X/Y coordinates
 
 ## Writing Tasks
 
@@ -121,4 +126,3 @@ and ofc everyone else who gave encouragement and support during the development 
 Love you all <3
 
 time taken - 6 hours total
-
