@@ -4,7 +4,7 @@ notes is a small client side fabric mod for keeping minecraft plans in minecraft
 
 i wanted it to feel like a simple notepad you can open while playing allowing you to write down build ideas, pin a few tasks to the HUD, track materials, and close it without leaving the world or relying on a server or you being able to find the same .txt file again!
 
-if any suggestions are wanted either make a github issue or dm me on discord at @izzi.ed
+if any suggestions are wanted either make a github issue or dm me on discord at @iz.zyd
 
 everything is saved locally in your current minecraft instance at:
 
